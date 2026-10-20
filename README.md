@@ -8,9 +8,9 @@ availability and npm installation do not grant access to restricted blueprints.
 
 ## Install
 
-**npm publication is pending:** the first publish attempt was blocked by npm's
-2FA requirement. The registry package is not available yet. Until publishing is
-verified, use [the local installation steps](#develop--install-locally).
+**npm publication is pending:** account 2FA is enabled, but publishing still
+requires the owner's one-time authenticator approval. Until the registry release
+is verified, use [the local installation steps](#develop--install-locally).
 The npm commands below are the intended installation commands after release:
 
 ```sh
