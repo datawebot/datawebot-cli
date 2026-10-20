@@ -133,8 +133,21 @@ export async function run(args, { env = process.env, stdout = process.stdout, st
       output(data);
       exitCode = outcome(data);
     });
-  program.command('jobs').description('Account-wide Job listing: blocked until the Jobs API exposes a list endpoint.')
-    .action(() => { throw new CliError('not_supported', 'The current Jobs API has no account-wide job-list endpoint. Retain job_id and use dtwb status/retrieve.'); });
+  program.command('jobs').description('List this account’s active and past Jobs, newest first; return one unchanged API page.')
+    .option('--cursor <cursor>', 'opaque next_cursor from the previous Jobs page')
+    .option('--page-size <count>', 'Jobs per page', integer(1, 100), 25)
+    .action(async opts => {
+      const key = await client.token();
+      const query = new URLSearchParams({ page_size: String(opts.pageSize) });
+      if (opts.cursor !== undefined) query.set('cursor', opts.cursor);
+      const { data } = await client.request('/v1/jobs?' + query, { key });
+      if (!Array.isArray(data?.jobs) ||
+          (data.next_cursor !== null && typeof data.next_cursor !== 'string')) {
+        throw new CliError('invalid_response', 'API returned an invalid Jobs page.');
+      }
+      for (const listed of data.jobs) job(listed);
+      output(data);
+    });
   try {
     if (!args.length) { program.outputHelp(); return 0; }
     await program.parseAsync(args, { from: 'user' });

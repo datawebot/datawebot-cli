@@ -29,7 +29,7 @@
   "bugs": {
     "url": "https://github.com/datawebot/datawebot-cli/issues"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"

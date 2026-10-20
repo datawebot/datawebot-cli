@@ -1,7 +1,7 @@
 // Test the distributable, not a global link into the source checkout.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,8 +16,12 @@ try {
   const names = packed.files.map(file => file.path);
   assert(names.includes('bin/dtwb.js'));
   assert(names.includes('src/cli.js'));
-  assert(names.every(name => ['package.json', 'README.md'].includes(name) || name.startsWith('bin/') || name.startsWith('src/')));
+  assert(names.includes('LICENSE'));
+  assert(names.every(name => ['package.json', 'README.md', 'LICENSE'].includes(name) || name.startsWith('bin/') || name.startsWith('src/')));
   npm(['install', '--prefix', temporary, '--ignore-scripts', '--no-audit', '--no-fund', resolve(temporary, packed.filename)], temporary);
+  const installed = join(temporary, 'node_modules/@datawebot/cli');
+  assert.equal(JSON.parse(readFileSync(join(installed, 'package.json'), 'utf8')).license, 'MIT');
+  assert.equal(readFileSync(join(installed, 'LICENSE'), 'utf8'), readFileSync(join(root, 'LICENSE'), 'utf8'));
   const executable = join(temporary, 'node_modules/.bin', process.platform === 'win32' ? 'dtwb.cmd' : 'dtwb');
   // Windows .cmd launchers require cmd; the generated paths contain no user input.
   const launch = args => execFileSync(process.platform === 'win32' ? '"' + executable + '"' : executable, args,

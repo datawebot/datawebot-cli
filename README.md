@@ -3,8 +3,22 @@
 Agent-friendly API wrapper for [datawebot](https://www.datawebot.com), built with
 [Commander.js](https://github.com/tj/commander.js). Executable: **dtwb**.
 
-**Pre-release; not published to npm.** Repository visibility is private until the
-owners approve a public release. Node **22.12+** is required. No build step.
+**Initial 0.x preview.** Node **22.12+** is required. No build step. Source
+availability and npm installation do not grant access to restricted blueprints.
+
+## Install
+
+```sh
+npm install --global @datawebot/cli@0.1.0
+dtwb --version
+dtwb --help
+```
+
+Or run without a global install:
+
+```sh
+npx --yes --package=@datawebot/cli@0.1.0 dtwb --help
+```
 
 ## Develop / install locally
 
@@ -24,7 +38,15 @@ dtwb discover
 dtwb discover amazon
 dtwb man amazon.product_details
 dtwb credits
+dtwb jobs
+dtwb jobs --page-size 25 --cursor 'NEXT_CURSOR_FROM_PREVIOUS_JOBS_PAGE'
 ```
+
+`jobs` lists this account’s active and past Jobs, newest first, returning one
+unchanged API page. Use its `next_cursor` to continue; the CLI does not filter
+statuses, combine pages, or substitute machine-local history. Listing uses
+`GET /v1/jobs` with your customer key. Availability and access are determined by
+the API; the CLI does not bypass permissions or maintenance.
 
 Registration uses the existing email-approved device flow. Compare the code in
 stderr with your approval email, then approve on the website. Opening the email
@@ -132,19 +154,18 @@ See the public [API quickstart](https://www.datawebot.com/docs/api/quickstart)
 and [agent guide](https://www.datawebot.com/docs/agents). Use `dtwb discover` for
 the current blueprint versions, input schemas and availability.
 
-- The API has **no account-wide job-list endpoint**. `dtwb jobs` explicitly
-  reports `not_supported`; it does not invent a route, use private scraping
-  credentials, or mislabel a local history as the account's active/past Jobs.
+- Account-wide listing requires a valid customer key and Jobs access.
+  Live listing through this CLI has not been independently verified.
 - `credits` returns `GET /v1/account` unchanged. Its current synthetic,
   unbilled allowance is **not** a real wallet balance or pricing policy.
 - Live availability comes from discovery and API responses, not these examples.
 - Tests use synthetic HTTP/device fixtures, not live email, paid data extraction
   or deployed acceptance. No server deployment is part of this repository.
 
-## npm release preparation (not authorization to publish)
+## Maintainer release checks
 
-The intended package is `@datawebot/cli`, exposing `dtwb`. Package contents
-are allowlisted to `bin/` and `src/` plus npm's package/README defaults.
+The npm package is `@datawebot/cli`, exposing `dtwb`. Package contents
+are allowlisted to `bin/` and `src/` plus npm's package/README/LICENSE defaults.
 Commander.js is the only runtime dependency; npm is the sole package manager in
 this standalone repo. CI checks Node 22/24 on Linux and Windows and installs a
 packed tarball to verify the actual executable.
@@ -158,11 +179,15 @@ npm run test:package
 # Inspect the archive before an authorized release.
 ```
 
-Before publishing, owners must approve repository visibility, package name,
-version, license/redistribution terms (currently deliberately **UNLICENSED**),
-README claims and live acceptance; verify control of the `@datawebot` npm scope
-and availability of the name. The GitHub org does not grant npm scope ownership.
-Configure npm authentication/2FA or trusted publishing outside this repository.
-No token, automatic publish workflow, npm release, or production mutation is
-included. `prepack` runs the offline test suite. When release approval and npm
-access are in place, `npm publish --access public` is the manual release step.
+The CLI is [MIT licensed](LICENSE). This license covers the CLI code; use of
+the hosted service is governed by the [datawebot terms](https://www.datawebot.com/terms).
+
+Each release requires owner approval of the version, scope and verification
+limits. Verify publishing rights to the `@datawebot` npm scope; GitHub org
+membership does not grant npm access. Configure npm authentication/2FA or trusted
+publishing outside this repository—never commit credentials.
+
+`prepack` runs the offline test suite. `npm publish --access public` is the manual
+release step; publishing is not automated by CI. Verify registry metadata and a
+fresh registry installation afterward. No server deployment or live extraction
+is implied by publishing the CLI.

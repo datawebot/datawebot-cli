@@ -216,9 +216,74 @@ test('malformed/mismatched responses fail closed; raw API errors redact keys', a
   assert.match(result.stderr, /REDACTED/);
 });
 
-test('job listing explicitly reports missing API dependency without network', async () => {
-  const result = await runner([]).invoke(['jobs']);
-  assert.equal(JSON.parse(result.stderr).error.code, 'not_supported');
+test('jobs lists account-wide active and past Jobs unchanged with the default page size', async () => {
+  const listing = { jobs: [
+    { job_id: ID, status: 'PENDING', blueprint_id: 'amazon.search_items', result_count: 0 },
+    { job_id: '22222222-2222-4222-8222-222222222222', status: 'FAILED', error_code: 'source_failed' },
+  ], next_cursor: 'next-jobs-page', extra_metadata: 'preserved' };
+  const cli = runner([request => {
+    assert.equal(request.method, 'GET');
+    assert.equal(request.url.pathname, '/v1/jobs');
+    assert.equal(request.url.searchParams.get('page_size'), '25');
+    assert.equal(request.url.searchParams.has('cursor'), false);
+    assert.equal(request.headers.Authorization, 'Bearer ' + KEY);
+    return json(listing);
+  }]);
+  const result = await cli.invoke(['jobs']);
+  assert.equal(result.code, 0);
+  assert.equal(result.stderr, '');
+  assert.deepEqual(JSON.parse(result.stdout), listing);
+  assert.equal(cli.calls.length, 1);
+});
+
+test('jobs forwards cursor/page-size safely and never fetches another page automatically', async () => {
+  const cli = runner([request => {
+    assert.equal(request.url.searchParams.get('cursor'), 'opaque+/=&token');
+    assert.equal(request.url.searchParams.get('page_size'), '17');
+    return json({ jobs: [], next_cursor: null });
+  }]);
+  const result = await cli.invoke(['jobs', '--cursor', 'opaque+/=&token', '--page-size', '17']);
+  assert.equal(result.code, 0);
+  assert.deepEqual(JSON.parse(result.stdout), { jobs: [], next_cursor: null });
+  assert.equal(cli.calls.length, 1);
+});
+
+test('jobs rejects invalid page sizes before reading credentials or making requests', async () => {
+  for (const size of ['0', '101', '1.5', 'no']) {
+    const cli = runner([]);
+    const result = await cli.invoke(['jobs', '--page-size', size]);
+    assert.equal(result.code, 2);
+    assert.equal(result.stdout, '');
+    assert.equal(cli.calls.length, 0);
+  }
+});
+
+test('jobs rejects malformed listing responses without emitting success JSON', async () => {
+  for (const data of [{}, { jobs: [], next_cursor: 1 }, { jobs: [] },
+      { jobs: [{ job_id: ID, status: 'UNKNOWN' }], next_cursor: null }]) {
+    const result = await runner([json(data)]).invoke(['jobs']);
+    assert.equal(result.code, 1);
+    assert.equal(result.stdout, '');
+    assert.equal(JSON.parse(result.stderr).error.code, 'invalid_response');
+  }
+});
+
+test('jobs preserves access errors and older-server 404s without using private routes or local history', async () => {
+  for (const [status, code] of [[403, 'pilot_access_required'], [404, 'not_found']]) {
+    const cli = runner([json({ error: { code, message: 'Listing unavailable' } }, status)]);
+    const result = await cli.invoke(['jobs']);
+    assert.equal(result.code, 1);
+    assert.equal(JSON.parse(result.stderr).error.code, code);
+    assert.equal(cli.calls.length, 1);
+    assert.equal(result.stdout, '');
+  }
+});
+
+test('jobs requires a customer key before listing', async () => {
+  const cli = runner([], { env: {}, store: { read: async () => ({}) } });
+  const result = await cli.invoke(['jobs']);
+  assert.equal(JSON.parse(result.stderr).error.code, 'login_required');
+  assert.equal(cli.calls.length, 0);
 });
 
 test('origins, parameters and target security checks reject unsafe input before submission', async () => {
