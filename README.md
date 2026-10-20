@@ -8,10 +8,8 @@ availability and npm installation do not grant access to restricted blueprints.
 
 ## Install
 
-**npm publication is pending:** account 2FA is enabled, but publishing still
-requires the owner's one-time authenticator approval. Until the registry release
-is verified, use [the local installation steps](#develop--install-locally).
-The npm commands below are the intended installation commands after release:
+Published on npm: [@datawebot/cli](https://www.npmjs.com/package/@datawebot/cli).
+Version **0.1.0** has been verified with a fresh registry installation.
 
 ```sh
 npm install --global @datawebot/cli@0.1.0
