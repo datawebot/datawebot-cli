@@ -22,6 +22,11 @@ try {
   const installed = join(temporary, 'node_modules/@datawebot/cli');
   assert.equal(JSON.parse(readFileSync(join(installed, 'package.json'), 'utf8')).license, 'MIT');
   assert.equal(readFileSync(join(installed, 'LICENSE'), 'utf8'), readFileSync(join(root, 'LICENSE'), 'utf8'));
+  const readme = readFileSync(join(installed, 'README.md'), 'utf8');
+  assert.equal(readme, readFileSync(join(root, 'README.md'), 'utf8'));
+  for (const link of readme.split('https://github.com/').slice(1)) {
+    assert(['datawebot', 'tj'].includes(link.split('/')[0]), 'README links must point to approved public GitHub owners.');
+  }
   const executable = join(temporary, 'node_modules/.bin', process.platform === 'win32' ? 'dtwb.cmd' : 'dtwb');
   // Windows .cmd launchers require cmd; the generated paths contain no user input.
   const launch = args => execFileSync(process.platform === 'win32' ? '"' + executable + '"' : executable, args,
