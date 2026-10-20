@@ -1,0 +1,43 @@
+{
+  "name": "@datawebot/cli",
+  "version": "0.1.0",
+  "description": "Agent-friendly command-line client for datawebot data extraction.",
+  "type": "module",
+  "bin": {
+    "dtwb": "bin/dtwb.js"
+  },
+  "files": [
+    "bin/",
+    "src/"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "test": "node --test",
+    "test:package": "node scripts/verify-package.js",
+    "prepack": "npm test"
+  },
+  "dependencies": {
+    "commander": "^15.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/datawebot/datawebot-cli.git"
+  },
+  "homepage": "https://github.com/datawebot/datawebot-cli#readme",
+  "bugs": {
+    "url": "https://github.com/datawebot/datawebot-cli/issues"
+  },
+  "license": "UNLICENSED",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "keywords": [
+    "datawebot",
+    "cli",
+    "extraction",
+    "agents"
+  ]
+}
