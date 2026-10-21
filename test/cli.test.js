@@ -16,7 +16,7 @@ const catalog = { blueprints: [
   { blueprint_id: 'amazon.search_items', version: '1', name: 'Amazon search', description: 'Search', availability: 'ENABLED' },
   { blueprint_id: 'amazon.product_details', version: '1', name: 'Amazon PDP', description: 'One product', availability: 'ENABLED' },
   { blueprint_id: 'newshop.search_items', version: '2', name: 'New shop', description: 'Dynamic blueprint', availability: 'ENABLED' },
-], billing: 'mock_unbilled' };
+], total: 3, next_cursor: null };
 const metadata = (status = 'PENDING') => ({ job_id: ID, status, eta_delivery: status === 'PENDING' ? new Date().toISOString() : null,
   poll_after_seconds: status === 'PENDING' ? 2 : null, request: { original: true }, result_count: 1 });
 const page = (status = 'COMPLETED', cursor = null) => ({ ...metadata(status), results: [{ record_index: 0, data: { title: 'Coffee' } }],
@@ -83,12 +83,53 @@ test('help/version need neither credentials nor network; parser errors are JSON 
   }
 });
 
-test('discovery is unchanged without query; query/man filter only the blueprints', async () => {
-  const whole = await runner([json(catalog)]).invoke(['discover']);
+test('discovery searches all stores on the server, paginates and returns only discovery metadata', async () => {
+  const whole = await runner([request => {
+    assert.equal(request.url.pathname, '/v1/job-blueprints');
+    assert.deepEqual(Object.fromEntries(request.url.searchParams), { page_size: '30' });
+    return json(catalog);
+  }]).invoke(['discover']);
   assert.deepEqual(JSON.parse(whole.stdout), catalog);
-  const filtered = await runner([json(catalog)]).invoke(['man', 'AMAZON']);
-  assert.equal(JSON.parse(filtered.stdout).blueprints.length, 2);
-  assert.equal(JSON.parse(filtered.stdout).billing, 'mock_unbilled');
+  const based = { blueprint_id: 's_based_com.product_details', version: '1', site_name: 'based.com' };
+  const filtered = await runner([request => {
+    assert.deepEqual(Object.fromEntries(request.url.searchParams), { page_size: '10', q: 'based', cursor: '10' });
+    return json({ blueprints: [based], total: 11, next_cursor: null, billing: 'mock_unbilled', additional_catalogs: [], statuses: [] });
+  }]).invoke(['man', 'based', '--page-size', '10', '--cursor', '10']);
+  assert.equal(filtered.code, 0);
+  assert.deepEqual(JSON.parse(filtered.stdout), { blueprints: [based], total: 11, next_cursor: null });
+});
+
+test('discovery exact lookup and invalid/old API responses are explicit', async () => {
+  const exact = await runner([request => {
+    assert.equal(request.url.searchParams.get('blueprint_id'), 's_based_com.product_details');
+    return json({ blueprints: [catalog.blueprints[0]], total: 1, next_cursor: null });
+  }]).invoke(['discover', '--blueprint-id', 's_based_com.product_details']);
+  assert.equal(exact.code, 0);
+  for (const args of [['discover', 'based', '--blueprint-id', 'x'], ['discover', '--blueprint-id', 'x', '--cursor', '1']]) {
+    const result = await runner([]).invoke(args);
+    assert.equal(result.code, 1);
+    assert.equal(JSON.parse(result.stderr).error.code, 'invalid_input');
+  }
+  for (const body of [{ blueprints: [] }, { blueprints: [], total: -1, next_cursor: null }, { blueprints: [], total: 0, next_cursor: 10 }]) {
+    const result = await runner([json(body)]).invoke(['discover', 'based']);
+    assert.equal(result.code, 1);
+    assert.equal(JSON.parse(result.stderr).error.code, 'invalid_response');
+  }
+});
+
+test('extract resolves an exact shared-store contract instead of searching a default catalog page', async () => {
+  const id = 's_based_com.product_details';
+  const cli = runner([request => {
+    assert.equal(request.url.searchParams.get('blueprint_id'), id);
+    return json({ blueprints: [{ blueprint_id: id, version: '1' }], total: 1, next_cursor: null });
+  }, request => {
+    assert.equal(request.url.pathname, '/v1/jobs');
+    assert.equal(request.body.blueprint_id, id);
+    return json(metadata(), 202);
+  }]);
+  const result = await cli.invoke(['extract', id, 'https://based.com/products/real-handle', '--async']);
+  assert.equal(result.code, 0);
+  assert.equal(cli.steps.length, 0);
 });
 
 test('credits exposes synthetic account flags unchanged', async () => {

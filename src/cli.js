@@ -70,13 +70,23 @@ export async function run(args, { env = process.env, stdout = process.stdout, st
       finally { client.log = log; }
     });
   program.command('discover [query]').alias('man')
-    .description('Discover live blueprint input/record schemas. Optional query filters blueprint IDs, names and descriptions.')
-    .action(async query => {
+    .description('Discover contracts across all supported stores. Search by store/domain/operation; use --blueprint-id for one exact contract.')
+    .option('--blueprint-id <id>', 'exact registered operation ID')
+    .option('--cursor <cursor>', 'next_cursor from discovery (keep the same search)')
+    .option('--page-size <count>', 'contracts per page', integer(1, 100), 30)
+    .action(async (query, opts) => {
+      if (opts.blueprintId && (query !== undefined || opts.cursor !== undefined))
+        throw new CliError('invalid_input', 'Use --blueprint-id separately from query and cursor.');
       const key = await client.token();
-      const { data } = await client.request('/v1/job-blueprints', { key });
-      if (!Array.isArray(data?.blueprints)) throw new CliError('invalid_response', 'API did not return a blueprint catalog.');
-      output(query ? { ...data, blueprints: data.blueprints.filter(b =>
-        [b.blueprint_id, b.name, b.description].some(value => String(value).toLowerCase().includes(query.toLowerCase()))) } : data);
+      const params = new URLSearchParams({ page_size: String(opts.pageSize) });
+      if (query !== undefined) params.set('q', query);
+      if (opts.blueprintId !== undefined) params.set('blueprint_id', opts.blueprintId);
+      if (opts.cursor !== undefined) params.set('cursor', opts.cursor);
+      const { data } = await client.request('/v1/job-blueprints?' + params, { key });
+      if (!Array.isArray(data?.blueprints) || !Number.isSafeInteger(data.total) || data.total < 0 ||
+          (data.next_cursor !== null && typeof data.next_cursor !== 'string'))
+        throw new CliError('invalid_response', 'API did not return a paginated discovery response. Update the Jobs API before using this CLI.');
+      output({ blueprints: data.blueprints, total: data.total, next_cursor: data.next_cursor });
     });
   program.command('credits').alias('account').description('Return the Jobs account/credit response unchanged (currently synthetic/unbilled).')
     .action(async () => { output((await client.request('/v1/account', { key: await client.token() })).data); });
@@ -88,7 +98,7 @@ export async function run(args, { env = process.env, stdout = process.stdout, st
     .action(async (blueprint, input, opts) => {
       const { id, url } = target(blueprint, input);
       const key = await client.token();
-      const { data: catalog } = await client.request('/v1/job-blueprints', { key });
+      const { data: catalog } = await client.request('/v1/job-blueprints?' + new URLSearchParams({ blueprint_id: id }), { key });
       const contract = catalog?.blueprints?.find(b => b.blueprint_id === id);
       if (!contract || typeof contract.version !== 'string') throw new CliError('unknown_blueprint', 'Blueprint not in the live catalog. Run dtwb discover.');
       const idempotencyKey = opts.idempotencyKey ?? randomUUID();
