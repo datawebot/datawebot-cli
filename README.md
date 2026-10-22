@@ -38,7 +38,9 @@ node bin/dtwb.js --help
 dtwb register you@example.com
 dtwb discover
 dtwb discover amazon
-dtwb man amazon.product_details
+dtwb discover based.com
+dtwb man --blueprint-id amazon.product_details
+dtwb discover --page-size 30 --cursor 'NEXT_CURSOR_FROM_DISCOVERY'
 dtwb credits
 dtwb jobs
 dtwb jobs --page-size 25 --cursor 'NEXT_CURSOR_FROM_PREVIOUS_JOBS_PAGE'
@@ -49,6 +51,15 @@ unchanged API page. Use its `next_cursor` to continue; the CLI does not filter
 statuses, combine pages, or substitute machine-local history. Listing uses
 `GET /v1/jobs` with your customer key. Availability and access are determined by
 the API; the CLI does not bypass permissions or maintenance.
+
+Discovery searches all public stores through `GET /v1/job-blueprints?q=...`;
+there is no separate Shopify catalog to select. It returns `blueprints`, `total`
+and `next_cursor`, with full input/output contracts, current price and configured
+availability. With no query it returns the first page (30 contracts by default,
+maximum 100); keep the same query when following `next_cursor`. Use
+`--blueprint-id` alone for one exact contract. IDs are opaque: use the ID returned
+by discovery rather than constructing it. Registration does not prove a store's
+extraction has passed production acceptance; follow the qualification caveat.
 
 Registration uses the existing email-approved device flow. Compare the code in
 stderr with your approval email, then approve on the website. Opening the email
@@ -103,8 +114,11 @@ By default, extraction submits once, waits according to ETA, poll guidance and
 HTTP Retry-After, then returns **one unchanged API result page**. Stdout is one
 JSON document, not a CLI envelope. Use `next_cursor` to fetch further pages,
 with the **same page size**. The CLI does not concatenate pages and misrepresent
-that as an unchanged API response. Discovery without a query is unchanged;
-filtered discovery keeps catalog metadata and filters only `blueprints`.
+that as an unchanged API response. Discovery filters and paginates on the server,
+not against a partial local list. Extraction resolves the exact blueprint's live
+contract, so operations outside the first discovery page work too. This requires
+the unified-discovery Jobs API rollout before releasing the updated CLI; an older
+API is not silently treated as an empty search result.
 
 `retrieve` without `--wait` performs one result read (pending jobs return
 metadata). `status` reads metadata. Neither submits work. Failed, partial and
