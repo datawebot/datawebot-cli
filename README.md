@@ -11,7 +11,7 @@ availability and npm installation do not grant access to restricted blueprints.
 Published on npm: [@datawebot/cli](https://www.npmjs.com/package/@datawebot/cli).
 
 ```sh
-npm install --global @datawebot/cli@0.1.1
+npm install --global @datawebot/cli@0.1.2
 dtwb --version
 dtwb --help
 ```
@@ -19,7 +19,7 @@ dtwb --help
 Or run without a global install:
 
 ```sh
-npx --yes --package=@datawebot/cli@0.1.1 dtwb --help
+npx --yes --package=@datawebot/cli@0.1.2 dtwb --help
 ```
 
 ## Develop / install locally
