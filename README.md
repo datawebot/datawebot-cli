@@ -6,6 +6,13 @@ Agent-friendly API wrapper for [datawebot](https://www.datawebot.com), built wit
 **Initial 0.x preview.** Node **22.12+** is required. No build step. Source
 availability and npm installation do not grant access to restricted blueprints.
 
+## What is datawebot?
+
+datawebot gives AI agents ecommerce product data: product search across online shops
+worldwide and seller offers with direct links to each shop, through an MCP server.
+
+Learn more: [About datawebot](https://www.datawebot.com/about).
+
 ## Install
 
 Published on npm: [@datawebot/cli](https://www.npmjs.com/package/@datawebot/cli).
