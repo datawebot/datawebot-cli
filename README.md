@@ -84,6 +84,45 @@ private. On Windows, POSIX mode checks are unavailable: protect this directory
 with your account's filesystem ACLs. Disconnect/revoke keys on the website;
 there is no pretend local-only server revocation command.
 
+## Search and product (by intent)
+
+```sh
+# These examples submit real work and can use credits.
+dtwb search 'running shoes' --site allbirds.com --limit 5
+dtwb search 'running shoes' --site allbirds --country DE   # a shop name picks that market's shop
+dtwb search 'espresso grinder'                              # across shops
+dtwb product https://www.allbirds.com/products/mens-tree-runners
+dtwb product PRODUCT_ID_FROM_SEARCH
+
+# Budget and replay-safe keys for scheduled scripts:
+dtwb search 'running shoes' --site allbirds.com --max-credits 10 --request-key nightly-2026-10-28
+
+# Free: what a shop supports and the most each costs, before running anything.
+dtwb site allbirds.com
+
+# Free: finish a request that answered "working", or read its next page.
+dtwb result REQUEST_ID --wait
+dtwb result REQUEST_ID --cursor 'NEXT_CURSOR_FROM_PREVIOUS_ANSWER'
+```
+
+`search` and `product` ask the request router (`POST /v1/requests`) by intent: the
+API picks the shop's endpoint, or a shopping search, and returns the same structured
+answer as the MCP tools `search_products` and `get_product`. While an answer says
+`"status": "working"`, the CLI waits as advised (`check_after_seconds`) and reads it
+again with `GET /v1/requests/{id}`, then prints the answer unchanged. `--async`
+returns the first answer instead. `--raw` adds the shop's own data where it has it.
+
+Each submission sends a request key (`--request-key`, or a generated UUID), written
+to stderr with the `request_id` even with `--quiet`. Submissions are **not retried
+automatically**: after an ambiguous submission, run the same command with the same
+`--request-key` to get the same request back instead of running it again. A
+`failed` answer exits 1 and is printed unchanged. `--max-credits` is a budget: if the
+request could cost more, nothing runs and nothing is charged.
+
+`site` reads `GET /v1/sites` (search, product details and catalogue, each with
+`available` and the most it costs). Use `discover` and `extract` only for one exact
+endpoint, such as a shop's whole catalogue or several pages.
+
 ## Extract
 
 ```sh
@@ -136,8 +175,10 @@ stops waiting, **does not cancel a server Job**, and preserves recovery details.
 - **stdout:** one JSON response on success; help/version are plain text.
 - **stderr:** progress, approval instructions, recovery IDs, and structured JSON
   errors. `--quiet` hides routine progress; `--verbose` includes read retries.
-- **0:** successful command, pending one-shot read, or accepted async submission.
-- **1:** API/network/local failure, or FAILED/UNAVAILABLE extraction/retrieval.
+- **0:** successful command, pending one-shot read, accepted async submission, or a
+  `done`/`working` request answer.
+- **1:** API/network/local failure, FAILED/UNAVAILABLE extraction/retrieval, or a
+  `failed` request answer.
 - **2:** invalid CLI input, or PARTIAL_COMPLETE extraction/retrieval (inspect JSON).
 - **130 / 143:** interrupted by SIGINT / SIGTERM. Server work is retained.
 
@@ -172,8 +213,8 @@ the current blueprint versions, input schemas and availability.
 
 - Account-wide listing requires a valid customer key and Jobs access.
   Live listing through this CLI has not been independently verified.
-- `credits` returns `GET /v1/account` unchanged. Its current synthetic,
-  unbilled allowance is **not** a real wallet balance or pricing policy.
+- `credits` returns `GET /v1/account` unchanged: the account's credits and any
+  credits held for running requests.
 - Live availability comes from discovery and API responses, not these examples.
 - Tests use synthetic HTTP/device fixtures, not live email, paid data extraction
   or deployed acceptance. No server deployment is part of this repository.

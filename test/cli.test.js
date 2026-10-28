@@ -467,3 +467,145 @@ test('issuer denial is terminal; pending challenge is retained and no key is sav
   assert.deepEqual(await store.read('credentials'), {});
   assert.equal(Object.keys(await store.read('device-pending.json')).length, 1);
 });
+
+const RID = '33333333-3333-4333-8333-333333333333';
+const meta = { as_of: '2026-10-28T00:00:00.000Z', country: 'US', credits_used: 5, credits_left: 95 };
+const working = { request_id: RID, status: 'working', check_after_seconds: 5, summary: 'Still working on this.' };
+const searched = { request_id: RID, status: 'done', products: [{ title: 'Runner', product_id: 'p_aHR0cHM6Ly9leGFtcGxlLmNvbS8' }], next_cursor: null, meta };
+const lastError = result => JSON.parse(result.stderr.trim().split('\n').at(-1)).error;
+
+test('search asks the request router by intent, keeps a request key, waits and returns the answer unchanged', async () => {
+  const cli = runner([request => {
+    assert.equal(request.method, 'POST');
+    assert.equal(request.url.pathname, '/v1/requests');
+    assert.equal(request.headers.Authorization, 'Bearer ' + KEY);
+    const { request_key: key, ...rest } = request.body;
+    assert.match(key, /^[a-f0-9-]{36}$/);
+    assert.deepEqual(rest, { capability: 'search', query: 'running shoes', country: 'DE', limit: 5, site: 'allbirds', format: 'structured', max_credits: 10 });
+    return json(working);
+  }, request => {
+    assert.equal(request.method, 'GET');
+    assert.equal(request.url.pathname, '/v1/requests/' + RID);
+    return json(searched);
+  }]);
+  const result = await cli.invoke(['search', ' running shoes ', '--site', 'allbirds', '--country', 'de', '--limit', '5', '--max-credits', '10']);
+  assert.equal(result.code, 0);
+  assert.deepEqual(JSON.parse(result.stdout), searched);
+  assert.match(result.stderr, /request_key: [a-f0-9-]{36}/);
+  assert.match(result.stderr, /request_id: 3333/);
+  assert.match(result.stderr, /poll: 1/);
+  assert.equal(cli.steps.length, 0);
+});
+
+test('search --async returns the first answer; --request-key and --raw are forwarded; no site means across shops', async () => {
+  const cli = runner([request => {
+    assert.deepEqual(request.body, { capability: 'search', query: 'coffee', country: 'US', limit: 10, format: 'raw', request_key: 'nightly-2026-10-28' });
+    return json(working);
+  }]);
+  const result = await cli.invoke(['search', 'coffee', '--async', '--raw', '--request-key', 'nightly-2026-10-28']);
+  assert.equal(result.code, 0);
+  assert.deepEqual(JSON.parse(result.stdout), working);
+  assert.equal(cli.calls.length, 1);
+});
+
+test('product takes a page URL or a product_id from search', async () => {
+  const product = { request_id: RID, status: 'done', product: { title: 'Runner' }, meta };
+  for (const [value, field] of [['https://www.allbirds.com/products/mens-tree-runners', 'url'], ['p_aHR0cHM6Ly9leGFtcGxlLmNvbS8', 'product_id']]) {
+    const cli = runner([request => {
+      assert.equal(request.body.capability, 'product');
+      assert.equal(request.body[field], value);
+      assert.equal(Object.keys(request.body).filter(k => ['url', 'product_id'].includes(k)).length, 1);
+      return json(product);
+    }]);
+    const result = await cli.invoke(['product', value]);
+    assert.equal(result.code, 0);
+    assert.deepEqual(JSON.parse(result.stdout), product);
+  }
+});
+
+test('failed answers exit 1 unchanged; unsafe or empty input never reaches the API', async () => {
+  const failed = { request_id: RID, status: 'failed', error: { code: 'product_not_found', message: 'No product at that link.' }, meta };
+  const cli = runner([json(failed)]);
+  const result = await cli.invoke(['product', 'https://kith.com/products/made-up']);
+  assert.equal(result.code, 1);
+  assert.deepEqual(JSON.parse(result.stdout), failed);
+  for (const args of [['product', 'http://kith.com/products/x'], ['product', 'https://u:p@kith.com/products/x'], ['product', 'not a url'],
+                      ['search', 'x'], ['search', 'coffee', '--limit', '21'], ['search', 'coffee', '--country', 'USA'],
+                      ['search', 'coffee', '--max-credits', '-1'], ['search', 'coffee', '--request-key', 'short'],
+                      ['result', 'invalid-id'], ['site', 'allbirds.com', '--country', '1']]) {
+    const blocked = runner([]);
+    assert.notEqual((await blocked.invoke(args)).code, 0, args.join(' '));
+    assert.equal(blocked.calls.length, 0, args.join(' '));
+  }
+});
+
+test('ambiguous request submission is not retried and keeps the request key for replay', async () => {
+  const cli = runner([() => { throw new Error('Network error ' + KEY); }]);
+  const result = await cli.invoke(['search', 'coffee', '--request-key', 'retained-key-1']);
+  assert.equal(result.code, 1);
+  assert.equal(result.stdout, '');
+  const error = lastError(result);
+  assert.equal(error.code, 'network_error');
+  assert.equal(error.request_key, 'retained-key-1');
+  assert.equal(cli.calls.length, 1);
+  assert(!result.stderr.includes(KEY));
+});
+
+test('timeout after acceptance keeps request_id and the resume command', async () => {
+  const cli = runner([json(working)]);
+  const result = await cli.invoke(['--timeout', '1', 'search', 'coffee']);
+  assert.equal(result.code, 1);
+  const error = lastError(result);
+  assert.equal(error.code, 'timeout');
+  assert.equal(error.request_id, RID);
+  assert.match(error.resume, /dtwb result 3333.* --wait/);
+});
+
+test('result is one read by default, forwards the cursor, waits with --wait and rejects a mismatched request', async () => {
+  const once = runner([request => {
+    assert.equal(request.method, 'GET');
+    assert.equal(request.url.pathname, '/v1/requests/' + RID);
+    assert.equal(request.url.searchParams.get('cursor'), 'opaque+/=&token');
+    return json(working);
+  }]);
+  const pending = await once.invoke(['result', RID, '--cursor', 'opaque+/=&token']);
+  assert.equal(pending.code, 0);
+  assert.deepEqual(JSON.parse(pending.stdout), working);
+  assert.equal(once.calls.length, 1);
+  const waited = runner([json(working), json(searched)]);
+  const done = await waited.invoke(['result', RID, '--wait']);
+  assert.equal(done.code, 0);
+  assert.deepEqual(JSON.parse(done.stdout), searched);
+  for (const response of [json({ ...searched, request_id: '44444444-4444-4444-8444-444444444444' }), json({ ...searched, status: 'COMPLETED' })]) {
+    const result = await runner([response]).invoke(['result', RID]);
+    assert.equal(result.code, 1);
+    assert.equal(result.stdout, '');
+    assert.equal(lastError(result).code, 'invalid_response');
+  }
+});
+
+test('site returns what a shop supports and its maximum costs, and rejects other shapes', async () => {
+  const summary = { site: 'allbirds.de', search: { available: true, credits: 5 }, product: { available: true, credits: 1 },
+    catalog: { available: false, credits: null }, raw_available: true };
+  const cli = runner([request => {
+    assert.equal(request.method, 'GET');
+    assert.equal(request.url.pathname, '/v1/sites');
+    assert.equal(request.url.searchParams.get('site'), 'allbirds');
+    assert.equal(request.url.searchParams.get('country'), 'DE');
+    return json(summary);
+  }]);
+  const result = await cli.invoke(['site', 'allbirds', '--country', 'de']);
+  assert.equal(result.code, 0);
+  assert.deepEqual(JSON.parse(result.stdout), summary);
+  const old = await runner([json({ error: { code: 'not_found', message: 'Endpoint not found.' } }, 404)]).invoke(['site', 'allbirds.com']);
+  assert.equal(old.code, 1);
+  assert.equal(lastError(old).code, 'not_found');
+  const bad = await runner([json({ site: 'allbirds.com' })]).invoke(['site', 'allbirds.com']);
+  assert.equal(lastError(bad).code, 'invalid_response');
+});
+
+test('help lists the intent commands and credits no longer claims a synthetic balance', async () => {
+  const result = await runner([], { store: { read() { throw new Error('Must not read credentials'); } } }).invoke(['--help']);
+  for (const name of ['search', 'product', 'result', 'site']) assert.match(result.stdout, new RegExp('\\n  ' + name + ' '));
+  assert.doesNotMatch(result.stdout, /synthetic/);
+});
