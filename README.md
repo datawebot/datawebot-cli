@@ -11,7 +11,7 @@ availability and npm installation do not grant access to restricted blueprints.
 Published on npm: [@datawebot/cli](https://www.npmjs.com/package/@datawebot/cli).
 
 ```sh
-npm install --global @datawebot/cli@0.1.2
+npm install --global @datawebot/cli@0.1.3
 dtwb --version
 dtwb --help
 ```
@@ -19,7 +19,7 @@ dtwb --help
 Or run without a global install:
 
 ```sh
-npx --yes --package=@datawebot/cli@0.1.2 dtwb --help
+npx --yes --package=@datawebot/cli@0.1.3 dtwb --help
 ```
 
 ## Develop / install locally
@@ -239,12 +239,16 @@ npm run test:package
 The CLI is [MIT licensed](LICENSE). This license covers the CLI code; use of
 the hosted service is governed by the [datawebot terms](https://www.datawebot.com/terms).
 
-Each release requires owner approval of the version, scope and verification
-limits. Verify publishing rights to the `@datawebot` npm scope; GitHub org
-membership does not grant npm access. Configure npm authentication/2FA or trusted
-publishing outside this repository—never commit credentials.
+Releases publish from GitHub Actions (`.github/workflows/release.yml`) through npm
+trusted publishing: npm accepts this repository's workflow, so no npm token is
+stored anywhere. To release, with the owner's approval of the version and scope:
 
-`prepack` runs the offline test suite. `npm publish --access public` is the manual
-release step; publishing is not automated by CI. Verify registry metadata and a
-fresh registry installation afterward. No server deployment or live extraction
-is implied by publishing the CLI.
+```sh
+npm version patch        # or minor; commits the bump and tags v<version>
+git push --follow-tags   # the tag runs the Release workflow
+```
+
+The workflow checks the tag matches `package.json`, runs the tests, the audit and
+the packed-tarball check, then runs `npm publish` with provenance. Verify registry
+metadata and a fresh registry installation afterward. No server deployment or
+live extraction is implied by publishing the CLI.
