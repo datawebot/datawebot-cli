@@ -35,9 +35,11 @@ export async function waitForJob(client, response, key) {
   return response.data;
 }
 
-export async function results(client, id, key, { cursor, pageSize = 100 } = {}) {
+export async function results(client, id, key, { cursor, pageSize = 100, format } = {}) {
   const query = new URLSearchParams({ page_size: String(pageSize) });
   if (cursor !== undefined) query.set('cursor', cursor);
+  // Sent only when asked for, so the default page stays the API's unchanged raw records.
+  if (format !== undefined) query.set('format', format);
   const { data } = await client.request('/v1/jobs/' + encodeURIComponent(id) + '/results?' + query, { key });
   job(data, id);
   if (terminal.has(data.status) && data.status !== 'UNAVAILABLE' &&

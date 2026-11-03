@@ -42,6 +42,10 @@ const idempotency = value => {
   return value;
 };
 
+const resultFormat = value => {
+  if (!['raw', 'structured', 'both'].includes(value)) throw new InvalidArgumentError('Use raw, structured or both.');
+  return value;
+};
 export async function run(args, { env = process.env, stdout = process.stdout, stderr = process.stderr,
     signal, fetchImpl = fetch, store } = {}) {
   let client;
@@ -169,6 +173,7 @@ export async function run(args, { env = process.env, stdout = process.stdout, st
     .option('--async', 'return the submission response immediately without polling')
     .option('--parameters <json>', 'blueprint parameters as a JSON object', parameters, {})
     .option('--idempotency-key <key>', 'reuse this key and identical inputs after an ambiguous submission', idempotency)
+    .option('--format <format>', 'result records: raw (default), structured (common product fields) or both', resultFormat)
     .action(async (blueprint, input, opts) => {
       const { id, url } = target(blueprint, input);
       const key = await client.token();
@@ -188,7 +193,7 @@ export async function run(args, { env = process.env, stdout = process.stdout, st
       client.important('job_id: ' + submitted.job_id);
       if (opts.async) { output(submitted); exitCode = outcome(submitted); return; }
       const finished = await waitForJob(client, accepted, key);
-      const data = finished.status === 'UNAVAILABLE' ? finished : await results(client, submitted.job_id, key);
+      const data = finished.status === 'UNAVAILABLE' ? finished : await results(client, submitted.job_id, key, { format: opts.format });
       output(data);
       exitCode = outcome(data);
     });
@@ -203,6 +208,7 @@ export async function run(args, { env = process.env, stdout = process.stdout, st
     .option('--wait', 'poll until terminal before retrieving; never resubmit')
     .option('--cursor <cursor>', 'opaque next_cursor from the previous result page')
     .option('--page-size <count>', 'records per result page', integer(1, 100), 100)
+    .option('--format <format>', 'result records: raw (default), structured (common product fields) or both', resultFormat)
     .action(async (id, opts) => {
       jobId(id);
       context = { job_id: id, resume: 'dtwb retrieve ' + id + ' --wait (use the same API/issuer configuration)' };
