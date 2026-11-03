@@ -141,6 +141,7 @@ dtwb status JOB_UUID
 dtwb retrieve JOB_UUID
 dtwb retrieve JOB_UUID --wait
 dtwb retrieve JOB_UUID --page-size 100 --cursor 'NEXT_CURSOR_FROM_PREVIOUS_PAGE'
+dtwb retrieve JOB_UUID --format structured   # common product fields; both = raw and structured
 ```
 
 `amazon.pdp` and `amazon.search` are aliases for the API IDs

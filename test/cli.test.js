@@ -207,6 +207,29 @@ test('pending retrieve is one-shot; cursor/page-size are forwarded safely', asyn
   assert.equal((await cli.invoke(['retrieve', ID, '--cursor', 'opaque+/=&token', '--page-size', '37'])).code, 0);
 });
 
+test('--format asks the API for structured or both records; without it no format is sent', async () => {
+  const cli = runner([request => {
+    assert.equal(request.url.searchParams.get('format'), 'structured');
+    return json(page());
+  }]);
+  assert.equal((await cli.invoke(['retrieve', ID, '--format', 'structured'])).code, 0);
+  const plain = runner([request => {
+    assert.equal(request.url.searchParams.has('format'), false);
+    return json(page());
+  }]);
+  assert.equal((await plain.invoke(['retrieve', ID])).code, 0);
+  const extract = runner([json(catalog), json(metadata(), 202), json(metadata('COMPLETED')), request => {
+    assert.equal(request.url.pathname, '/v1/jobs/' + ID + '/results');
+    assert.equal(request.url.searchParams.get('format'), 'both');
+    return json(page());
+  }]);
+  assert.equal((await extract.invoke(['extract', 'amazon.pdp', 'B012345678', '--format', 'both'])).code, 0);
+  assert.equal(extract.steps.length, 0);
+  const wrong = runner([]);
+  assert.equal((await wrong.invoke(['retrieve', ID, '--format', 'json'])).code, 2);
+  assert.equal(wrong.calls.length, 0);
+});
+
 test('failed/partial/unavailable outcomes are preserved and never resubmitted', async () => {
   for (const [status, code] of [['FAILED', 1], ['PARTIAL_COMPLETE', 2], ['UNAVAILABLE', 1]]) {
     const cli = runner([json(status === 'UNAVAILABLE' ? metadata(status) : page(status))]);
