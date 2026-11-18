@@ -90,7 +90,7 @@ there is no pretend local-only server revocation command.
 # These examples submit real work and can use credits.
 dtwb search 'running shoes' --site allbirds.com --limit 5
 dtwb search 'running shoes' --site allbirds --country DE   # a shop name picks that market's shop
-dtwb search 'espresso grinder'                              # across shops
+dtwb search 'espresso grinder' --site any                   # across shops: 25 credits, a shop is about 5
 dtwb product https://www.allbirds.com/products/mens-tree-runners
 dtwb product PRODUCT_ID_FROM_SEARCH
 

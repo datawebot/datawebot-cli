@@ -126,8 +126,8 @@ export async function run(args, { env = process.env, stdout = process.stdout, st
     .option('--raw', "also return the shop's own data unchanged, where the shop has it")
     .option('--async', 'return the first answer immediately; finish later with dtwb result');
   askOptions(program.command('search <query>')
-    .description('Find products for a keyword, on one shop (--site) or across shops. Structured JSON with a product_id per result.')
-    .option('--site <shop>', 'shop domain (allbirds.com, amazon.de) or name (allbirds); leave out to search across shops')
+    .description('Find products for a keyword on one shop (--site), or across shops with --site any (25 credits). Structured JSON with a product_id per result.')
+    .option('--site <shop>', 'required: shop domain (allbirds.com, amazon.de) or name (allbirds); "any" searches across shops for 25 credits')
     .option('--country <code>', 'two-letter market code; picks the shop’s market when --site is a name', country, 'US')
     .option('--limit <count>', 'organic results to return', integer(1, 20), 10))
     .action(async (query, opts) => {
